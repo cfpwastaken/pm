@@ -1,0 +1,9 @@
+{
+    "cpumon": {
+        "author": "cfp",
+        "description": "CPU Monitor, used for testing PM",
+        "password": "password",
+        "run": "CPU Monitor.exe",
+        "install": ""
+    }
+}
