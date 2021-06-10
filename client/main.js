@@ -1,6 +1,5 @@
 #! /usr/bin/env node
-
-require("dotenv").config();
+require("dotenv").config({ path: __dirname + "/.env" });
 
 // Import a lot of libs
 const ora = require('ora'); // Spinners
@@ -11,7 +10,6 @@ const admZip = require("adm-zip"); // Extract Zips n stuff
 const bcrypt = require("bcrypt"); // Encrypt password
 var spinner;
 const { exec } = require("child_process"); // For linking and stuff
-
 const server = process.env.SERVER; // Server for requesting packages.
 
 // Called to install a package
@@ -129,7 +127,7 @@ const info = async (package) => {
 const refresh = async () => {
     spinner = ora('Getting Package list').start();
     try {
-        const response = await got(server + "list.json");
+        const response = await got(server + "/list.json");
         fs.writeFileSync(__dirname + "/list.json", response.body);
         const list = require(__dirname + "/list.json");
     } catch(e) {
@@ -176,11 +174,11 @@ const savehere = (package) => {
             return;
         }
         
-        if (!fs.existsSync(process.cwd() + 'packages/')){
+        if (!fs.existsSync(process.cwd() + '/packages/')){
             fs.mkdirSync(process.cwd() + '/packages/');
         }
 
-        const source = `${server}package/${package}.zip`;
+        const source = `${server}/package/${package}.zip`;
 
         request
         .get(source)
