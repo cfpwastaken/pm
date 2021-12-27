@@ -1,0 +1,23 @@
+{
+    "cpumon": {
+        "author": "cfp",
+        "description": "CPU monitoring",
+        "custom": {
+            "GitHub": "https://github.com"
+        },
+        "platforms": {
+            "windows": {
+                "run": "CPU Monitor.exe",
+                "install": ""
+            },
+            "linux": {
+                "custom": {
+                    "Port": "cfp"
+                },
+                "description": "CPU monitoring, ported to linux by cfp too lmao, but this just test soo",
+                "run": "CPU Monitor.AppImage",
+                "install": ""
+            }
+        }
+    }
+}
