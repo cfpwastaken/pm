@@ -9,6 +9,7 @@ const bcrypt = require("bcrypt"); // Encrypt password
 var spinner;
 const { exec } = require("child_process"); // For linking and stuff
 let servers = require(__dirname + "/servers.json"); // Servers for requesting packages.
+const {FormData} = require("formdata-node")
 
 // Called to install a package
 const install = async (package) => {
@@ -33,13 +34,13 @@ const install = async (package) => {
             fs.mkdirSync(__dirname + '/packages/');
         }
 
-        if(!list[package][process.platform]) {
+        if(!list[package].platforms[process.platform]) {
             spinner.text = "Package is not available for this platform.";
             spinner.fail();
             return;
         }
 
-        const source = `${list[package].server}package/${package}/${process.platform}.zip`;
+        const source = `${list[package].server}/package/${package}/${process.platform}.zip`;
 
         request
         .get(source)
@@ -91,32 +92,47 @@ const install = async (package) => {
 };
 
 const uninstall = (package) => {
-    spinner = ora("Unlinking").start();
-    fs.writeFileSync(__dirname + "/packages/" + package + "/unlink.bat", "@echo off\ncd /d " + __dirname + "/packages/" + package + "\ncall npm unlink");
-    exec(__dirname + "/packages/" + package + "/unlink.bat", (error, stdout, stderr) => {
-        if(error) {
-            spinner.text = "ERROR: " + error.message;
-            spinner.fail();
-            return;
-        }
-        if(stderr) {
-            spinner.text = "STDERR: " + stderr;
-            spinner.fail();
-            return;
-        }
-        spinner.succeed();
+    // spinner = ora("Unlinking").start();
+    // fs.writeFileSync(__dirname + "/packages/" + package + "/unlink.bat", "@echo off\ncd /d " + __dirname + "/packages/" + package + "\ncall npm unlink");
+    // exec(__dirname + "/packages/" + package + "/unlink.bat", (error, stdout, stderr) => {
+    //     if(error) {
+    //         spinner.text = "ERROR: " + error.message;
+    //         spinner.fail();
+    //         return;
+    //     }
+    //     if(stderr) {
+    //         spinner.text = "STDERR: " + stderr;
+    //         spinner.fail();
+    //         return;
+    //     }
+    //     spinner.succeed();
 
-        spinner = ora('Uninstalling ' + package).start();
-        try {
-            fs.unlinkSync(__dirname + "/packages/" + package + ".zip");
-        } catch(e) {}
-        try {
-            var rimraf = require("rimraf");
-            rimraf.sync(__dirname + "/packages/" + package);
-        } catch(e) {}
-        spinner.succeed();
-    });
+        const list = require(__dirname + "/list.json");
+
+        spinner = ora('Running uninstall script').start();
+        if(list[package].install == "") {
+            spinner.succeed();
+            uninstall2(package);
+            return;
+        }
+        exec(__dirname + "/packages/" + package + "/" + list[package].install, (error, stdout, stderr) => {
+            spinner.succeed();
+            uninstall2(package);
+        });
+    // });
 };
+
+const uninstall2 = (package) => {
+    spinner = ora('Uninstalling ' + package).start();
+    try {
+        fs.unlinkSync(__dirname + "/packages/" + package + ".zip");
+    } catch(e) {}
+    try {
+        var rimraf = require("rimraf");
+        rimraf.sync(__dirname + "/packages/" + package);
+    } catch(e) {}
+    spinner.succeed();
+}
 
 const info = async (package) => {
     if(!fs.existsSync(__dirname + "/list.json")) {
@@ -196,15 +212,42 @@ const publish = () => {
     console.log(process.cwd());
     const prompt = require('prompt');
     prompt.start();
-    prompt.get(['packagename', 'author', 'description', 'password'], (err, result) => {
+    prompt.get(["server"], async (err, result) => {
         if(err) return;
-        const salt = bcrypt.genSaltSync(13);
-        const password = bcrypt.hashSync(result.password, salt);
-        
-        var zip = new admZip();
-        zip.addLocalFolder(process.cwd());
-        zip.addZipComment(result.packagename + ";" + result.author + ";" + result.description + ";" + password);
-        zip.writeZip(process.cwd() + "/" + result.packagename + ".zip");
+        const server = result.server;
+        const json = JSON.parse((await got(server + "/upload.json")).body);
+        if(json.message) {
+            console.log("Server denied upload request.");
+            console.log(json.message);
+        } else if(json.url && json.code) {
+            console.log(`Navigate to ${json.url} and enter ${json.code}`);
+            const open = require("open");
+            await open(json.url + "?code=" + json.code);
+            const pressAnyKey = require('press-any-key');
+            await pressAnyKey().catch(() => {process.exit(0)});
+            var zip = new admZip();
+            zip.addLocalFolder(process.cwd());
+            if(fs.existsSync(".pmignore")) {
+                const ignore = fs.readFileSync(".pmignore").toString().split("\n");
+                for (let i = 0; i < ignore.length; i++) {
+                    zip.removeEntry(ignore[i]);
+                }
+            }
+            zip.writeZip(process.cwd() + "/" + result.packagename + ".zip");
+            const fd = new FormData();
+            fd.append("file", fs.createReadStream(process.cwd() + "/" + result.packagename + ".zip"));
+            const response = await got(server + "/upload", { method: "POST", body: fd });
+        }
+    });
+};
+
+const init = () => {
+    console.log(process.cwd());
+    const prompt = require('prompt');
+    prompt.start();
+    prompt.get(['name', 'author', 'description'], (err, result) => {
+        if(err) return;
+        fs.writeFileSync(process.cwd() + "/pm.json", JSON.stringify({name: result.name, author: result.author, description: result.description, custom: {}, platforms: {}}, null, 2));
     });
 };
 
@@ -306,6 +349,10 @@ program.command("server list").alias("sl").description("List Servers").action(()
 
 program.command("server remove <server>").alias("sr").description("Remove a Server").action((server) => {
     removeServer(server);
+});
+
+program.command("init").description("Create pm.json file").action((server) => {
+    init();
 });
 
 program.parse(process.argv);
