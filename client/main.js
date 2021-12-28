@@ -210,6 +210,11 @@ const list = () => {
 const publish = () => {
     for(var i = 0; i < 10; i++) console.log("WIP");
     console.log(process.cwd());
+    if(!fs.existsSync(__dirname + "/pm.json")) {
+        console.log("pm.json not found. Try running pm init.");
+        return;
+    }
+    const pmjson = require(process.cwd() + "/pm.json");
     const prompt = require('prompt');
     prompt.start();
     prompt.get(["server"], async (err, result) => {
@@ -233,9 +238,9 @@ const publish = () => {
                     zip.removeEntry(ignore[i]);
                 }
             }
-            zip.writeZip(process.cwd() + "/" + result.packagename + ".zip");
+            zip.writeZip(process.cwd() + "/" + pmjson.name + ".zip");
             const fd = new FormData();
-            fd.append("file", fs.createReadStream(process.cwd() + "/" + result.packagename + ".zip"));
+            fd.append("file", fs.createReadStream(process.cwd() + "/" + pmjson.name + ".zip"));
             const response = await got(server + "/upload", { method: "POST", body: fd });
         }
     });
